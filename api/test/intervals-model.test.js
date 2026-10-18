@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { localRecords, remoteRecord, applyRecord, decision, rangeFor } from '../intervals-model.js';
+import { localRecords, remoteRecord, applyRecord, decision, rangeFor, payloadFor } from '../intervals-model.js';
 
 const options = { today: '2026-10-18', historyDays: 90, futureDays: 42, timezone: 'Europe/Zurich' };
 const state = () => ({ unit: 'lb', workouts: [], bodyweight: [], routines: [{ id: 'r', name: 'Strength', ex: [{ id: 'squat', sets: 3, reps: 5, weight: 100 }] }], week: { 1: 'r' }, dayPlan: {}, customEx: [{ id: 'squat', n: 'Squat' }] });
@@ -201,4 +201,37 @@ test('ordinary completed rep and timed summaries retain their existing format', 
   ] }] }];
   const activity = localRecords(s, options).find(r => r.kind === 'activity');
   assert.equal(activity.value.description, 'Squat: 5 reps @ 50 kg; 30s @ 10 kg; 2min');
+});
+
+test('activity payload exports saved session volume converted from pounds', () => {
+  const s = state();
+  s.workouts = [{ id: 'w', d: '2026-10-18', vol: 1000, entries: [] }];
+  const activity = localRecords(s, options).find(r => r.kind === 'activity');
+  assert.equal(payloadFor('activity', activity.value).kg_lifted, 453.59237);
+  assert.equal(payloadFor('plan', localRecords(s, options).find(r => r.kind === 'plan').value).kg_lifted, undefined);
+});
+
+test('legacy session volume counts completed sides, drops and paired bells but excludes warmups', () => {
+  const s = state(); s.unit = 'kg';
+  s.workouts = [{ id: 'w', d: '2026-10-18', entries: [
+    { id: 'squat', sets: [
+      { w: 50, r: 5, done: true }, { w: 999, r: 99, done: false },
+      { w: 20, r: 10, done: true, warmup: true },
+      { w: 20, r: 10, done: true, phase: 'warmup' },
+      { w: 30, r: 5, done: true, type: 'dropset', drops: [{ w: 20, r: 5 }] },
+      { w: 10, r: 12, done: true, type: 'restpause', clusters: [{ r: 4 }] },
+      { sides: { L: { w: 10, r: 5, done: true }, R: { w: 20, r: 5, done: false } } },
+    ] },
+    { id: 'custom', target: { dbLoad: 'each' }, sets: [{ w: 10, r: 5, done: true }] },
+  ] }];
+  const activity = localRecords(s, options).find(r => r.kind === 'activity');
+  assert.equal(payloadFor('activity', activity.value).kg_lifted, 770);
+});
+
+test('remote summary-only activities retain lifted weight when exported again', () => {
+  const s = state();
+  const remote = remoteRecord('activity', { type: 'WeightTraining', start_date_local: '2026-10-18T10:00:00', kg_lifted: 1234.5 });
+  applyRecord(s, 'activity', 'remote', remote, 100, options);
+  const activity = localRecords(s, options).find(r => r.kind === 'activity');
+  assert.equal(payloadFor('activity', activity.value).kg_lifted, 1234.5);
 });

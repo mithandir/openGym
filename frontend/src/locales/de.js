@@ -1,5 +1,9 @@
 // German UI strings. Keys are the English source strings (see lib/i18n.js).
 export default {
+  "Re-sync existing activities": "Bestehende Aktivitäten erneut synchronisieren",
+  "Resends linked workouts in your saved history range to fill missing data, including weight lifted. Conflicts wait for your choice.": "Sendet verknüpfte Trainings im gespeicherten Zeitraum erneut, um fehlende Daten wie das gehobene Gewicht zu ergänzen. Konflikte warten auf deine Auswahl.",
+  "Activities left to re-sync: {0}": "Noch zu synchronisierende Aktivitäten: {0}",
+
   "This date already has another OpenGym session. Move a session to a free date before syncing.": "This date already has another OpenGym session. Move a session to a free date before syncing.",
   // Intervals.icu: controls localized; explanatory text uses the English source until translated.
   "Never": "Nie",

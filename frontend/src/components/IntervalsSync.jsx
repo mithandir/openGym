@@ -67,6 +67,9 @@ export default function IntervalsSync({ user, mobile = false, onPull = async () 
         onChange={enabled => { field('enabled', enabled); perform('settings', 'PUT', { ...form, enabled }) }} /></Row>
       <Row title={t('Sync now')} subtitle={t('Uploads and imports within your selected range. Conflicts wait for your choice.')}
         accessory="chevron" onClick={disabled ? undefined : () => perform('sync', 'POST')} />
+      <Row title={t('Re-sync existing activities')} subtitle={t('Resends linked workouts in your saved history range to fill missing data, including weight lifted. Conflicts wait for your choice.')}
+        accessory="chevron" onClick={disabled ? undefined : () => perform('resync-activities', 'POST')} />
+      {status.resyncRemaining > 0 && <Row title={t('Activities left to re-sync: {0}', status.resyncRemaining)} />}
     </>}
     {status && <div style={{ padding: 16, display: 'grid', gap: 12 }}>
       <label>{t('History to sync (days)')}<TextField aria-label={t('History to sync (days)')} type="number" min="1" max="3650" disabled={disabled} value={form.historyDays} onChange={e => field('historyDays', Number(e.target.value))} /></label>

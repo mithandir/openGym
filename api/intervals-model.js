@@ -58,12 +58,31 @@ function authoredNote(S, entries, desc, planned) {
 function value(date, time, name, desc, seconds = 0) {
   return { date, time: time || '00:00:00', name: text(name), description: text(desc), seconds: Math.max(0, Math.round(num(seconds))) };
 }
+// Match OpenGym's saved work-set volume for legacy sessions without a persisted total.
+function completedVolume(set) {
+  if (set.sides) return ['L', 'R'].reduce((v, side) => v + completedVolume(set.sides[side] || {}), 0);
+  if (!set.done) return 0;
+  return num(set.w) * num(set.r) + (set.type === 'dropset' ? list(set.drops).reduce((v, d) => v + num(d.w) * num(d.r), 0) : 0);
+}
+function liftedWeight(S, w) {
+  if (Number.isFinite(w.vol)) return kg(w.vol, S.unit);
+  if (!list(w.entries).length && w.intervalsSummary?.weightLifted != null) return w.intervalsSummary.weightLifted;
+  const volume = list(w.entries).reduce((total, entry) => {
+    const oneArm = entry.target?.side || /\b(one|single)[- ]?(arm|hand|handed)\b/i.test(names.get(entry.id) || '');
+    const factor = entry.target?.dbLoad === 'each' && !oneArm ? 2 : 1;
+    return total + list(entry.sets).reduce((v, set) => {
+      const phase = typeof set.phase === 'string' && set.phase ? set.phase.trim().toLowerCase() : set.warmup === true ? 'warmup' : 'work';
+      return v + (['warmup', 'warm-up', 'warm_up'].includes(phase) ? 0 : completedVolume(set) * factor);
+    }, 0);
+  }, 0);
+  return kg(volume, S.unit);
+}
 function workoutValue(S, w, timezone) {
   const detailed = description(S, w.entries, w.note, false);
   // Remote prose remains editable in History. Rebuild from sets only when the sets or note change.
   const kept = w.intervalsSummary;
   const desc = kept && equal(kept.entries, w.entries) && kept.note === (w.note || '') ? kept.description : detailed;
-  return value(w.d, w.start ? clockAt(w.start, timezone) : '00:00:00', w.name, desc, (num(w.end) - num(w.start)) / 1000);
+  return { ...value(w.d, w.start ? clockAt(w.start, timezone) : '00:00:00', w.name, desc, (num(w.end) - num(w.start)) / 1000), weightLifted: liftedWeight(S, w) };
 }
 function planRoutines(S, date) {
   const routines = list(S.routines), ov = S.dayPlan?.[date];
@@ -98,13 +117,13 @@ export function remoteRecord(kind, r) {
   if (kind === 'weight') return num(r.weight) > 0 ? { date: r.id, weight: round(num(r.weight)) } : null;
   if (r.type !== 'WeightTraining' || (kind === 'plan' && r.category !== 'WORKOUT')) return null;
   if (!/^\d{4}-\d{2}-\d{2}T\d\d:\d\d/.test(r.start_date_local || '')) return null;
-  return value(r.start_date_local.slice(0, 10), r.start_date_local.slice(11, 19).padEnd(8, ':00'), r.name, r.description, r.elapsed_time ?? r.moving_time);
+  return { ...value(r.start_date_local.slice(0, 10), r.start_date_local.slice(11, 19).padEnd(8, ':00'), r.name, r.description, r.elapsed_time ?? r.moving_time), ...(kind === 'activity' && r.kg_lifted != null ? { weightLifted: round(num(r.kg_lifted)) } : {}) };
 }
 export function payloadFor(kind, v, ext) {
   if (kind === 'weight') return { id: v.date, weight: v.weight };
   return {
     name: v.name, description: v.description, type: 'WeightTraining', start_date_local: `${v.date}T${v.time}`,
-    ...(kind === 'plan' ? { category: 'WORKOUT', moving_time: v.seconds } : { elapsed_time: v.seconds, moving_time: v.seconds }),
+    ...(kind === 'plan' ? { category: 'WORKOUT', moving_time: v.seconds } : { elapsed_time: v.seconds, moving_time: v.seconds, ...(v.weightLifted != null ? { kg_lifted: v.weightLifted } : {}) }),
     ...(ext ? { external_id: ext } : {}),
   };
 }
@@ -129,7 +148,7 @@ export function applyRecord(S, kind, key, v, now, options = {}) {
     if (v) {
       const start = instant(v.date, v.time, options.timezone);
       const w = { ...(old || { id: key, entries: [], prs: [], routineIds: [], excludeFromProgression: true }), d: v.date, name: v.name, note: authoredNote(S, old?.entries, v.description, false), start, end: start + v.seconds * 1000, _ts: now };
-      w.intervalsSummary = { description: v.description, note: w.note, entries: structuredClone(w.entries) };
+      w.intervalsSummary = { weightLifted: v.weightLifted, description: v.description, note: w.note, entries: structuredClone(w.entries) };
       S.workouts.push(w);
       S.workouts.sort((a, b) => (a.start || 0) - (b.start || 0));
     }

@@ -263,3 +263,129 @@ test('conflict tokens survive unchanged polling but cannot be reused after recon
   await h.sync.resolve('u', fresh.id, 'remote', fresh.token);
   assert.equal(h.state.workouts[0].name, 'Remote edit');
 });
+
+test('activities send session volume in kilograms and update it after set edits', async t => {
+  const h = harness(t);
+  h.state.workouts[0].entries = [{ id: 'squat', sets: [{ w: 50, r: 5, done: true }] }];
+  await connect(h); await h.sync.run('u');
+  assert.equal(h.remote.activities[0].kg_lifted, 250);
+  h.state.workouts[0].entries[0].sets[0].r = 8;
+  await h.sync.run('u');
+  assert.equal(h.remote.activities[0].kg_lifted, 400);
+  await h.sync.run('u');
+  assert.equal(h.remote.calls.filter(([m]) => m === 'POST' || m === 'PUT').length, 2);
+  assert.deepEqual(h.sync.status('u').conflicts, []);
+});
+
+test('existing linked activities gain lifted weight on the next sync', async t => {
+  const h = harness(t); await connect(h); await h.sync.run('u');
+  const file = path.join(h.dataDir, 'intervals-u.json');
+  const doc = JSON.parse(fs.readFileSync(file, 'utf8'));
+  for (const link of Object.values(doc.links)) {
+    delete link.local.weightLifted; delete link.remote.weightLifted;
+  }
+  fs.writeFileSync(file, JSON.stringify(doc));
+  delete h.remote.activities[0].kg_lifted;
+  h.state.workouts[0].vol = 1234;
+  await h.sync.run('u');
+  assert.equal(h.remote.activities[0].kg_lifted, 1234);
+  assert.deepEqual(h.sync.status('u').conflicts, []);
+});
+
+test('re-sync republishes existing activities once without duplicating them or touching other records', async t => {
+  const h = harness(t); h.state.workouts[0].vol = 1200;
+  await connect(h); await h.sync.run('u');
+  const id = h.remote.activities[0].id;
+  h.remote.activities[0].unrelated = 'keep';
+  const posts = h.remote.calls.filter(([m]) => m === 'POST').length;
+  h.sync.resyncActivities('u');
+  assert.equal(h.sync.status('u').resyncRemaining, 1);
+  await h.sync.run('u');
+  assert.equal(h.remote.activities.length, 1);
+  assert.equal(h.remote.activities[0].id, id);
+  assert.equal(h.remote.activities[0].kg_lifted, 1200);
+  assert.equal(h.remote.activities[0].unrelated, 'keep');
+  assert.equal(h.remote.calls.filter(([m]) => m === 'POST').length, posts);
+  assert.equal(h.remote.calls.filter(([m]) => m === 'PUT').length, 1);
+  assert.equal(h.sync.status('u').resyncRemaining, 0);
+  await h.sync.run('u');
+  assert.equal(h.remote.calls.filter(([m]) => m === 'PUT').length, 1);
+});
+
+test('re-sync fills missing data while retaining remote summary edits', async t => {
+  const h = harness(t); h.state.workouts[0].vol = 1200;
+  await connect(h); await h.sync.run('u');
+  h.remote.activities[0].kg_lifted = null;
+  h.remote.activities[0].description = 'Remote note';
+  h.sync.resyncActivities('u');
+  await h.sync.run('u'); await h.sync.run('u');
+  assert.equal(h.remote.activities[0].kg_lifted, 1200);
+  assert.equal(h.remote.activities[0].description, 'Remote note');
+  assert.equal(h.sync.status('u').resyncRemaining, 0);
+});
+
+test('re-sync survives a restart, respects the history range and keeps deletion conflicts for review', async t => {
+  const h = harness(t); await connect(h); await h.sync.run('u');
+  h.state.workouts.push({ ...structuredClone(workout), id: 'old', d: '2020-01-01' });
+  h.remote.activities.length = 0;
+  h.sync.resyncActivities('u');
+  const restarted = createIntervalsSync(h.deps);
+  assert.equal(restarted.status('u').resyncRemaining, 1);
+  await restarted.run('u');
+  assert.equal(restarted.status('u').conflicts.length, 1);
+  assert.equal(restarted.status('u').resyncRemaining, 1);
+  assert.equal(h.remote.activities.length, 0);
+});
+
+test('re-sync requires a connection and cannot race an active sync', async t => {
+  const h = harness(t);
+  assert.throws(() => h.sync.resyncActivities('u'), /Connect Intervals/);
+  await connect(h);
+  let release; h.hold(new Promise(r => { release = r; }));
+  const running = h.sync.run('u');
+  assert.throws(() => h.sync.resyncActivities('u'), /Wait for the current sync/);
+  release(); await running;
+});
+
+test('a requested re-sync continues even when automatic sync is switched off', async t => {
+  let clock = now;
+  const h = harness(t, { now: () => clock }); h.state.workouts[0].vol = 1200;
+  await connect(h); await h.sync.run('u');
+  h.sync.configure('u', { enabled: false });
+  h.remote.activities[0].kg_lifted = null;
+  h.sync.resyncActivities('u'); await h.sync.run('u');
+  assert.equal(h.sync.status('u').resyncRemaining, 1);
+  clock += 60000; await h.sync.tick();
+  assert.equal(h.remote.activities[0].kg_lifted, 1200);
+  assert.equal(h.sync.status('u').resyncRemaining, 0);
+  assert.equal(h.sync.status('u').options.enabled, false);
+});
+
+test('re-sync retains pending work after network failure and honors backoff', async t => {
+  let clock = now;
+  const h = harness(t, { now: () => clock });
+  await connect(h); await h.sync.run('u');
+  h.sync.resyncActivities('u'); h.fail(new Error('offline'));
+  await h.sync.run('u');
+  assert.equal(h.sync.status('u').resyncRemaining, 1);
+  const calls = h.remote.calls.length;
+  await h.sync.run('u'); assert.equal(h.remote.calls.length, calls);
+  clock += 60000;
+  const restarted = createIntervalsSync(h.deps); await restarted.run('u');
+  assert.equal(restarted.status('u').resyncRemaining, 0);
+});
+
+test('re-sync processes more than 100 linked activities in resumable batches', async t => {
+  const h = harness(t);
+  h.state.workouts = Array.from({ length: 101 }, (_, i) => ({ ...structuredClone(workout), id: 'w' + i, name: 'Gym ' + i, vol: i + 1 }));
+  await connect(h); await h.sync.run('u'); await h.sync.run('u');
+  assert.equal(h.remote.activities.length, 101);
+  h.sync.resyncActivities('u');
+  assert.equal(h.sync.status('u').resyncRemaining, 101);
+  await h.sync.run('u');
+  assert.equal(h.sync.status('u').resyncRemaining, 1);
+  const restarted = createIntervalsSync(h.deps); await restarted.run('u');
+  assert.equal(restarted.status('u').resyncRemaining, 0);
+  assert.equal(h.remote.activities.length, 101);
+  assert.equal(h.remote.calls.filter(([m]) => m === 'PUT').length, 101);
+});

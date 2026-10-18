@@ -4,6 +4,10 @@
 import pt from './pt.js'
 
 export const PT_BR_OVERRIDES = {
+  "Re-sync existing activities": "Sincronizar novamente as atividades existentes",
+  "Resends linked workouts in your saved history range to fill missing data, including weight lifted. Conflicts wait for your choice.": "Reenvia os treinos vinculados no período salvo para preencher dados ausentes, incluindo o peso levantado. Os conflitos aguardam sua escolha.",
+  "Activities left to re-sync: {0}": "Atividades restantes para sincronizar novamente: {0}",
+
   "This date already has another OpenGym session. Move a session to a free date before syncing.": "Esta data já tem outra sessão no OpenGym. Mova uma sessão para uma data livre antes de sincronizar.",
   // Intervals.icu
   "Never": "Nunca",

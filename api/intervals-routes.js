@@ -34,6 +34,11 @@ export function intervalsRoutes({ sync, json, readBody, readSession, origin, oau
       sync.run(user.id).catch(() => {});
       json(res, 202, sync.status(user.id));
     }),
+    'POST /api/intervals/resync-activities': wrap(async (req, res, user) => {
+      sync.resyncActivities(user.id);
+      sync.run(user.id).catch(() => {});
+      json(res, 202, sync.status(user.id));
+    }),
     'POST /api/intervals/resolve': wrap(async (req, res, user) => {
       const body = await readBody(req);
       json(res, 200, await sync.resolve(user.id, body.id, body.choice, body.token));
