@@ -1656,3 +1656,11 @@ describe('timed per-side pairs come off as a pair', () => {
     expect(setSpanAt([{ sec: 30, side: 'L' }, { sec: 30 }], 0)).toEqual([0, 1])
   })
 })
+
+it('freestyle seeding from a dated session retains logged loads without inheriting source lineage', () => {
+  const cfg = { id: '0025', sets: 2, reps: 5, weight: 40 }
+  const st = { workouts: [{ d: '2026-10-18', entries: [{ id: cfg.id, rid: 'dated', target: { ...cfg, weight: 100, progressionRoutineId: 'heavy' }, sets: [{ w: 100, r: 5, done: true }] }] }] }
+  const seeded = freestyleConfig(st, cfg)
+  expect(seeded.weight).toBe(100)
+  expect(seeded.progressionRoutineId).toBeUndefined()
+})

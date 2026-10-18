@@ -14,7 +14,7 @@ import { fileURLToPath } from 'node:url';
 
 const API = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const ROOT = path.join(API, '..');
-const read = f => fs.readFileSync(f, 'utf8');
+const read = f => fs.readFileSync(f, 'utf8').replace(/\r\n/g, '\n');
 const spec = read(path.join(API, 'openapi.yaml'));
 
 /** Every `'GET /api/x': async (req, res)` key in the route table. */
@@ -39,7 +39,8 @@ function specOperations(yaml) {
 test('every route the server registers is in openapi.yaml, and nothing else is', () => {
   const routes = new Set([
     ...routeKeys(read(path.join(API, 'server.js'))),
-    ...routeKeys(read(path.join(API, 'coach', 'routes.js')))
+    ...routeKeys(read(path.join(API, 'coach', 'routes.js'))),
+    ...routeKeys(read(path.join(API, 'intervals-routes.js')))
   ]);
   const ops = new Set(specOperations(spec));
   assert.ok(routes.size > 40, `only found ${routes.size} routes — the route table moved`);

@@ -2953,6 +2953,135 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
 
+  /api/intervals/status:
+    get:
+      operationId: getIntervalsStatus
+      tags: [data]
+      summary: Read the signed-in profile's Intervals.icu connection, polling status, and review items
+      description: Returns connected, running, athlete (id/name), options (historyDays, futureDays, timezone, enabled), lastSync/nextRun (epoch milliseconds), error, conflicts, plan reviews, counts, and oauthAvailable. Credentials are never returned.
+      responses:
+        '200':
+          description: Connection status; conflicts contain id, token (opaque reviewed snapshot token bound to this connection), kind (activity/weight/plan), key, local and remote shared-field snapshots (null means absent), and blocked for calendar collisions.
+        '401':
+          description: Not signed in
+  /api/intervals/connect:
+    post:
+      operationId: postIntervalsConnect
+      tags: [data]
+      summary: Connect a personal Intervals.icu API key
+      description: For personal self-hosting. The key is verified against athlete/0, encrypted outside profile state, and never returned. Defaults are 90 history days, 42 future days, UTC, automatic polling enabled. Reconnecting the same athlete retains record links.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [apiKey]
+              properties:
+                apiKey: { type: string, minLength: 8, maxLength: 512, writeOnly: true }
+                historyDays: { type: integer, minimum: 1, maximum: 3650, default: 90 }
+                futureDays: { type: integer, minimum: 1, maximum: 180, default: 42 }
+                timezone: { type: string, example: Europe/Zurich }
+                enabled: { type: boolean, default: true }
+      responses:
+        '200': { description: Connection saved; returns status }
+        '400': { description: Invalid key or options }
+        '401': { description: Not signed in or Intervals authentication refused }
+        '409': { description: A sync is running; wait before reconnecting }
+        '502': { description: Intervals unavailable }
+    delete:
+      operationId: deleteIntervalsConnect
+      tags: [data]
+      summary: Disconnect Intervals.icu and cancel pending imports
+      description: Removes credentials, links, and pending OAuth requests. Attempts OAuth revocation. Existing data in both apps is kept.
+      responses:
+        '200': { description: Disconnected }
+        '401': { description: Not signed in }
+  /api/intervals/settings:
+    put:
+      operationId: putIntervalsSettings
+      tags: [data]
+      summary: Change polling options for the connected profile
+      description: Body accepts historyDays (1–3650), futureDays (1–180), timezone (IANA), and enabled (boolean). Unspecified fields are preserved. Disabling automatic sync pauses timed and after-write triggers; manual sync remains available.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                historyDays: { type: integer, minimum: 1, maximum: 3650 }
+                futureDays: { type: integer, minimum: 1, maximum: 180 }
+                timezone: { type: string }
+                enabled: { type: boolean }
+      responses:
+        '200': { description: Updated status }
+        '400': { description: Invalid options }
+        '401': { description: Not signed in }
+        '409': { description: Not connected or currently running }
+  /api/intervals/sync:
+    post:
+      operationId: postIntervalsSync
+      tags: [data]
+      summary: Queue a server-side Intervals.icu sync
+      description: Returns immediately. Read status while running. Overlapping runs share the existing run; retries cannot bypass upstream rate-limit backoff. Automatic polling runs every 15 minutes and five seconds after profile writes.
+      responses:
+        '202': { description: Current status; run accepted or already active/backing off }
+        '401': { description: Not signed in }
+        '409': { description: Not connected }
+  /api/intervals/resolve:
+    post:
+      operationId: postIntervalsResolve
+      tags: [data]
+      summary: Choose a side of a reviewed sync conflict
+      description: Requires the opaque token returned with the displayed conflict. Applies only if the reviewed snapshot and connection still match; source snapshots are rechecked during the sync attempt. Choosing an absent side propagates deletion; clients must confirm this action. Blocked calendar collisions must be fixed at source. Returns status after a sync attempt; backoff still applies.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id, choice, token]
+              properties:
+                id: { type: string }
+                choice: { type: string, enum: [local, remote] }
+                token: { type: string, description: Opaque token from the displayed conflict; retain the original token through deletion confirmation. }
+      responses:
+        '200': { description: Updated status }
+        '400': { description: Conflict or choice invalid or blocked }
+        '401': { description: Not signed in }
+        '409': { description: A sync is running or the reviewed token is missing or stale; refresh status and review again }
+  /api/intervals/oauth/start:
+    post:
+      operationId: postIntervalsOauthStart
+      tags: [data]
+      summary: Start an Intervals.icu OAuth connection in the current web browser
+      description: Requires server INTERVALS_CLIENT_ID and INTERVALS_CLIENT_SECRET. Accepts the same range/timezone/enabled options as settings. Returns an authorization URL requesting ACTIVITY:WRITE, WELLNESS:WRITE, CALENDAR:WRITE. State is single-use, bound to this profile, and expires after ten minutes. Mobile users complete this in the web app.
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        '200': { description: Object containing url; navigate there to authorize }
+        '400': { description: Invalid options }
+        '401': { description: Not signed in }
+        '409': { description: OAuth not configured }
+        '429': { description: Too many pending connections }
+  /api/intervals/oauth/callback:
+    get:
+      operationId: getIntervalsOauthCallback
+      tags: [data]
+      summary: Complete the server-side Intervals.icu OAuth exchange
+      description: Requires the same signed-in browser and valid one-time state. Exchanges code on the server; credentials never reach profile state or the redirect destination. Uses INTERVALS_REDIRECT_URI or ORIGIN plus /api/intervals/oauth/callback.
+      parameters:
+        - { in: query, name: code, schema: { type: string } }
+        - { in: query, name: state, schema: { type: string } }
+        - { in: query, name: error, schema: { type: string } }
+      responses:
+        '303': { description: Connected; redirect to Settings → Data & backup }
+        '400': { description: Expired/replayed state, different profile, refused authorization, or missing scopes }
+        '502': { description: Exchange failed }
+
 components:
   securitySchemes:
     cookieAuth:

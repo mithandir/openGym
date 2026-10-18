@@ -135,3 +135,18 @@ describe('swap wording', () => {
     expect(configView.props.saveLabel).toBe('Use in this workout')
   })
 })
+
+it('a swap in a dated copied block preserves source training lineage and actual ownership', () => {
+  const S = clone(DEF)
+  const planned = { id: ids[2], sets: 1, reps: 5, weight: 40 }
+  const workout = (rid, weight, d) => ({ id: rid, d, routineIds: [rid], entries: [{ id: ids[2], rid, planned, target: { ...planned, weight }, sets: [{ w: weight, r: 5, done: true }] }] })
+  S.routines = [{ id: 'dated', name: 'Dated', prog: 'linear', ex: [] }]
+  S.workouts = [workout('heavy', 100, '2026-08-25'), workout('light', 50, '2026-08-26')]
+  S.active = { id: 'dated-session', d: '2026-08-27', routineIds: ['dated'], cur: 0, entries: [{ ...entry(ids[0]), rid: 'dated', target: { ...planned, id: ids[0], progressionRoutineId: 'heavy' } }] }
+  useStore.setState({ S, user: null })
+  submitSwap(0, EXDB[2], { mode: 'reps', sets: 1, reps: 5, weight: 40 })
+  const [swapped] = useStore.getState().S.active.entries
+  expect(swapped.rid).toBe('dated')
+  expect(swapped.target.progressionRoutineId).toBe('heavy')
+  expect(swapped.target.weight).toBe(102.5)
+})

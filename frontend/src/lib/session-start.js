@@ -34,7 +34,8 @@ export function buildPlannedEntry(stored, cfg, routine, { noProg = false } = {})
   const meaning = dbLoadFor(stored, cfg)
   const st = historyAs(stored, cfg.id, meaning)
   // `plan` is kept on the entry purely so the workout can explain the number it chose.
-  const plan = noProg ? { policy: 'off', kind: 'off' } : nextPrescription(st, cfg, routine)
+  const trainingRoutine = cfg.progressionRoutineId ? { ...routine, id: cfg.progressionRoutineId } : routine
+  const plan = noProg ? { policy: 'off', kind: 'off' } : nextPrescription(st, cfg, trainingRoutine)
   // The warm-up ramp and the prescription snap to the exercise's own increment (1.25 kg
   // plates exist), not the unit default; a timed exercise's `inc` is seconds, so it keeps the
   // default for its optional load.
@@ -45,10 +46,13 @@ export function buildPlannedEntry(stored, cfg, routine, { noProg = false } = {})
   const ramp = (modeOf(cfg) === 'reps' && ownedWeightsFor(st, cfg)) || step
   // Back-off sets step down from the top set by the exercise's own step (lib/backoff.js).
   const backoffStep = modeOf(cfg) === 'reps' && backoffStepOf(cfg, st.unit) ? step : 0
-  const built = applyPrescription(buildSets(st, cfg, { step: ramp, rid: routine?.id, useTarget: plan.kind === 'off', planReps }), plan, ramp, barFloor(st, cfg.id))
+  const built = applyPrescription(buildSets(st, cfg, { step: ramp, rid: trainingRoutine?.id, useTarget: plan.kind === 'off', planReps }), plan, ramp, barFloor(st, cfg.id))
   const rows = backoffStep ? applyBackoff(built, backoffStep) : built
   const sets = applyIntensifierPlan(rows, cfg, dropGrid(st, cfg))
   const target = { ...cfg }
+  // Adds and swaps may inherit an excluded source block while starting from a fresh config.
+  // Keep that origin on the target so later rebuilds and the header still respect it.
+  if (noProg) target.excludeFromProgression = true
   // Stamped on the session, so the meaning it was logged with stays with it (dumbbells.js).
   if (meaning !== 'as') target.dbLoad = meaning
   if (plan.weight != null) target.weight = plan.weight
@@ -106,20 +110,21 @@ export function plannedConfigOf(entry) {
  * one session, and that only stops the session from counting: its rows stay at the prescription.
  * Read as the first kind, a hand-set flag made a rebuild (Progression settings saved, a swap) drop
  * today's 102.5 to the routine's own 60, and its Undo then let those 60 count as progress. So only
- * an entry whose routine is itself kept out is built that way.
+ * an entry whose routine or copied source prescription is kept out is built that way.
  */
-export const builtOutOfProgression = (entry, routine) => entry?.noProg === true && routine?.excludeFromProgression === true
+export const builtOutOfProgression = (entry, routine) => entry?.noProg === true && (routine?.excludeFromProgression === true || entry?.target?.excludeFromProgression === true)
 
 // Returns a bare array of session entries. "Excluded from progression" is per-entry now
 // (`entry.noProg`, written only when true) rather than a wrapper flag — a rehab routine merged
 // into real work must exclude only its own exercises. The merge helper (lib/session-merge.js)
 // stamps `entry.rid`, so the single-routine and combined paths share this builder unchanged; it
-// only reads the routine's id, to start each exercise from that routine's own history (#216).
+// reads the routine's id to start from its own history (#216). A dated Intervals copy can
+// also carry a source routine's exclusion on individual configs when combining a mixed day.
 export function buildSessionEntries(st, r) {
   // The prescription is applied as the session is built, so you walk up to the bar with the
   // right weight already on the screen instead of being told about it afterwards.
-  const noProg = r?.excludeFromProgression === true
   return (r ? r.ex : []).map(cfg => {
+    const noProg = r?.excludeFromProgression === true || cfg.excludeFromProgression === true
     const built = buildPlannedEntry(st, cfg, r, { noProg })
     return { id: cfg.id, sg: cfg.sg, ...built, ...(noProg ? { noProg: true } : {}) }
   })

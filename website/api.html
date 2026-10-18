@@ -245,7 +245,7 @@ main.api-main .lead { color: var(--fg-2); max-width: 58ch; margin: 14px 0 0; fon
   <p class="api-facts">
     <span>OpenAPI 3.1.0</span>
     <span>openGym v1.4.1</span>
-    <span>69 endpoints</span>
+    <span>77 endpoints</span>
     <span>AGPL-3.0-or-later</span>
   </p>
 
@@ -1563,6 +1563,341 @@ main.api-main .lead { color: var(--fg-2); max-width: 58ch; margin: 14px 0 0; fon
   <div class="prow rrow">
     <span class="r-code s4">401</span>
     <span class="p-desc">No session, expired/revoked session, or a disabled account.<span class="r-sig"><code>{&quot;error&quot;:&quot;not signed in&quot;}</code></span></span>
+  </div>
+    </div>
+  </div>
+</details>
+
+<details class="ep" id="op-getIntervalsStatus">
+  <summary>
+    <span class="m get">GET</span>
+    <span class="ep-path"><code>/api/intervals/status</code></span>
+    <span class="ep-chev" aria-hidden="true"></span>
+    <span class="ep-sum">Read the signed-in profile's Intervals.icu connection, polling status, and review items</span>
+  </summary>
+  <div class="ep-body">
+<p>Returns connected, running, athlete (id/name), options (historyDays, futureDays, timezone, enabled), lastSync/nextRun (epoch milliseconds), error, conflicts, plan reviews, counts, and oauthAvailable. Credentials are never returned.</p>
+    <p class="ep-auth"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2.5"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span>Requires a session: the cookie set at sign-in, or <code>Authorization: Bearer &lt;token&gt;</code> from mobile-app pairing.</span></p>
+
+
+    <p class="ep-h">Responses</p>
+    <div class="ptab">
+  <div class="prow rrow">
+    <span class="r-code s2">200</span>
+    <span class="p-desc">Connection status; conflicts contain id, token (opaque reviewed snapshot token bound to this connection), kind (activity/weight/plan), key, local and remote shared-field snapshots (null means absent), and blocked for calendar collisions.</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">401</span>
+    <span class="p-desc">Not signed in</span>
+  </div>
+    </div>
+  </div>
+</details>
+
+<details class="ep" id="op-postIntervalsConnect">
+  <summary>
+    <span class="m post">POST</span>
+    <span class="ep-path"><code>/api/intervals/connect</code></span>
+    <span class="ep-chev" aria-hidden="true"></span>
+    <span class="ep-sum">Connect a personal Intervals.icu API key</span>
+  </summary>
+  <div class="ep-body">
+<p>For personal self-hosting. The key is verified against athlete/0, encrypted outside profile state, and never returned. Defaults are 90 history days, 42 future days, UTC, automatic polling enabled. Reconnecting the same athlete retains record links.</p>
+    <p class="ep-auth"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2.5"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span>Requires a session: the cookie set at sign-in, or <code>Authorization: Bearer &lt;token&gt;</code> from mobile-app pairing.</span></p>
+
+<p class="ep-h">Request body <span class="p-hint">(JSON)</span></p><div class="ptab">
+  <div class="prow">
+    <span class="p-name">apiKey<em class="p-req" title="required">required</em></span>
+    <span class="p-type">string <span class="p-hint">(&le; 512 chars)</span></span>
+    <span class="p-desc"></span>
+  </div>
+  <div class="prow">
+    <span class="p-name">historyDays</span>
+    <span class="p-type">integer <span class="p-hint">(1&ndash;3650, default 90)</span></span>
+    <span class="p-desc"></span>
+  </div>
+  <div class="prow">
+    <span class="p-name">futureDays</span>
+    <span class="p-type">integer <span class="p-hint">(1&ndash;180, default 42)</span></span>
+    <span class="p-desc"></span>
+  </div>
+  <div class="prow">
+    <span class="p-name">timezone</span>
+    <span class="p-type">string</span>
+    <span class="p-desc"></span>
+  </div>
+  <div class="prow">
+    <span class="p-name">enabled</span>
+    <span class="p-type">boolean <span class="p-hint">(default true)</span></span>
+    <span class="p-desc"></span>
+  </div>
+</div>
+    <p class="ep-h">Responses</p>
+    <div class="ptab">
+  <div class="prow rrow">
+    <span class="r-code s2">200</span>
+    <span class="p-desc">Connection saved; returns status</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">400</span>
+    <span class="p-desc">Invalid key or options</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">401</span>
+    <span class="p-desc">Not signed in or Intervals authentication refused</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">409</span>
+    <span class="p-desc">A sync is running; wait before reconnecting</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s5">502</span>
+    <span class="p-desc">Intervals unavailable</span>
+  </div>
+    </div>
+  </div>
+</details>
+
+<details class="ep" id="op-deleteIntervalsConnect">
+  <summary>
+    <span class="m delete">DELETE</span>
+    <span class="ep-path"><code>/api/intervals/connect</code></span>
+    <span class="ep-chev" aria-hidden="true"></span>
+    <span class="ep-sum">Disconnect Intervals.icu and cancel pending imports</span>
+  </summary>
+  <div class="ep-body">
+<p>Removes credentials, links, and pending OAuth requests. Attempts OAuth revocation. Existing data in both apps is kept.</p>
+    <p class="ep-auth"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2.5"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span>Requires a session: the cookie set at sign-in, or <code>Authorization: Bearer &lt;token&gt;</code> from mobile-app pairing.</span></p>
+
+
+    <p class="ep-h">Responses</p>
+    <div class="ptab">
+  <div class="prow rrow">
+    <span class="r-code s2">200</span>
+    <span class="p-desc">Disconnected</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">401</span>
+    <span class="p-desc">Not signed in</span>
+  </div>
+    </div>
+  </div>
+</details>
+
+<details class="ep" id="op-putIntervalsSettings">
+  <summary>
+    <span class="m put">PUT</span>
+    <span class="ep-path"><code>/api/intervals/settings</code></span>
+    <span class="ep-chev" aria-hidden="true"></span>
+    <span class="ep-sum">Change polling options for the connected profile</span>
+  </summary>
+  <div class="ep-body">
+<p>Body accepts historyDays (1–3650), futureDays (1–180), timezone (IANA), and enabled (boolean). Unspecified fields are preserved. Disabling automatic sync pauses timed and after-write triggers; manual sync remains available.</p>
+    <p class="ep-auth"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2.5"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span>Requires a session: the cookie set at sign-in, or <code>Authorization: Bearer &lt;token&gt;</code> from mobile-app pairing.</span></p>
+
+<p class="ep-h">Request body <span class="p-hint">(JSON)</span></p><div class="ptab">
+  <div class="prow">
+    <span class="p-name">historyDays</span>
+    <span class="p-type">integer <span class="p-hint">(1&ndash;3650)</span></span>
+    <span class="p-desc"></span>
+  </div>
+  <div class="prow">
+    <span class="p-name">futureDays</span>
+    <span class="p-type">integer <span class="p-hint">(1&ndash;180)</span></span>
+    <span class="p-desc"></span>
+  </div>
+  <div class="prow">
+    <span class="p-name">timezone</span>
+    <span class="p-type">string</span>
+    <span class="p-desc"></span>
+  </div>
+  <div class="prow">
+    <span class="p-name">enabled</span>
+    <span class="p-type">boolean</span>
+    <span class="p-desc"></span>
+  </div>
+</div>
+    <p class="ep-h">Responses</p>
+    <div class="ptab">
+  <div class="prow rrow">
+    <span class="r-code s2">200</span>
+    <span class="p-desc">Updated status</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">400</span>
+    <span class="p-desc">Invalid options</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">401</span>
+    <span class="p-desc">Not signed in</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">409</span>
+    <span class="p-desc">Not connected or currently running</span>
+  </div>
+    </div>
+  </div>
+</details>
+
+<details class="ep" id="op-postIntervalsSync">
+  <summary>
+    <span class="m post">POST</span>
+    <span class="ep-path"><code>/api/intervals/sync</code></span>
+    <span class="ep-chev" aria-hidden="true"></span>
+    <span class="ep-sum">Queue a server-side Intervals.icu sync</span>
+  </summary>
+  <div class="ep-body">
+<p>Returns immediately. Read status while running. Overlapping runs share the existing run; retries cannot bypass upstream rate-limit backoff. Automatic polling runs every 15 minutes and five seconds after profile writes.</p>
+    <p class="ep-auth"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2.5"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span>Requires a session: the cookie set at sign-in, or <code>Authorization: Bearer &lt;token&gt;</code> from mobile-app pairing.</span></p>
+
+
+    <p class="ep-h">Responses</p>
+    <div class="ptab">
+  <div class="prow rrow">
+    <span class="r-code s2">202</span>
+    <span class="p-desc">Current status; run accepted or already active/backing off</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">401</span>
+    <span class="p-desc">Not signed in</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">409</span>
+    <span class="p-desc">Not connected</span>
+  </div>
+    </div>
+  </div>
+</details>
+
+<details class="ep" id="op-postIntervalsResolve">
+  <summary>
+    <span class="m post">POST</span>
+    <span class="ep-path"><code>/api/intervals/resolve</code></span>
+    <span class="ep-chev" aria-hidden="true"></span>
+    <span class="ep-sum">Choose a side of a reviewed sync conflict</span>
+  </summary>
+  <div class="ep-body">
+<p>Requires the opaque token returned with the displayed conflict. Applies only if the reviewed snapshot and connection still match; source snapshots are rechecked during the sync attempt. Choosing an absent side propagates deletion; clients must confirm this action. Blocked calendar collisions must be fixed at source. Returns status after a sync attempt; backoff still applies.</p>
+    <p class="ep-auth"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2.5"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span>Requires a session: the cookie set at sign-in, or <code>Authorization: Bearer &lt;token&gt;</code> from mobile-app pairing.</span></p>
+
+<p class="ep-h">Request body <span class="p-hint">(JSON)</span></p><div class="ptab">
+  <div class="prow">
+    <span class="p-name">id<em class="p-req" title="required">required</em></span>
+    <span class="p-type">string</span>
+    <span class="p-desc"></span>
+  </div>
+  <div class="prow">
+    <span class="p-name">choice<em class="p-req" title="required">required</em></span>
+    <span class="p-type">&quot;local&quot; | &quot;remote&quot;</span>
+    <span class="p-desc"></span>
+  </div>
+  <div class="prow">
+    <span class="p-name">token<em class="p-req" title="required">required</em></span>
+    <span class="p-type">string</span>
+    <span class="p-desc">Opaque token from the displayed conflict; retain the original token through deletion confirmation.</span>
+  </div>
+</div>
+    <p class="ep-h">Responses</p>
+    <div class="ptab">
+  <div class="prow rrow">
+    <span class="r-code s2">200</span>
+    <span class="p-desc">Updated status</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">400</span>
+    <span class="p-desc">Conflict or choice invalid or blocked</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">401</span>
+    <span class="p-desc">Not signed in</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">409</span>
+    <span class="p-desc">A sync is running or the reviewed token is missing or stale; refresh status and review again</span>
+  </div>
+    </div>
+  </div>
+</details>
+
+<details class="ep" id="op-postIntervalsOauthStart">
+  <summary>
+    <span class="m post">POST</span>
+    <span class="ep-path"><code>/api/intervals/oauth/start</code></span>
+    <span class="ep-chev" aria-hidden="true"></span>
+    <span class="ep-sum">Start an Intervals.icu OAuth connection in the current web browser</span>
+  </summary>
+  <div class="ep-body">
+<p>Requires server INTERVALS_CLIENT_ID and INTERVALS_CLIENT_SECRET. Accepts the same range/timezone/enabled options as settings. Returns an authorization URL requesting ACTIVITY:WRITE, WELLNESS:WRITE, CALENDAR:WRITE. State is single-use, bound to this profile, and expires after ten minutes. Mobile users complete this in the web app.</p>
+    <p class="ep-auth"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2.5"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span>Requires a session: the cookie set at sign-in, or <code>Authorization: Bearer &lt;token&gt;</code> from mobile-app pairing.</span></p>
+
+<p class="ep-h">Request body <span class="p-hint">(JSON)</span></p>
+    <p class="ep-h">Responses</p>
+    <div class="ptab">
+  <div class="prow rrow">
+    <span class="r-code s2">200</span>
+    <span class="p-desc">Object containing url; navigate there to authorize</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">400</span>
+    <span class="p-desc">Invalid options</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">401</span>
+    <span class="p-desc">Not signed in</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">409</span>
+    <span class="p-desc">OAuth not configured</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">429</span>
+    <span class="p-desc">Too many pending connections</span>
+  </div>
+    </div>
+  </div>
+</details>
+
+<details class="ep" id="op-getIntervalsOauthCallback">
+  <summary>
+    <span class="m get">GET</span>
+    <span class="ep-path"><code>/api/intervals/oauth/callback</code></span>
+    <span class="ep-chev" aria-hidden="true"></span>
+    <span class="ep-sum">Complete the server-side Intervals.icu OAuth exchange</span>
+  </summary>
+  <div class="ep-body">
+<p>Requires the same signed-in browser and valid one-time state. Exchanges code on the server; credentials never reach profile state or the redirect destination. Uses INTERVALS_REDIRECT_URI or ORIGIN plus /api/intervals/oauth/callback.</p>
+    <p class="ep-auth"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2.5"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span>Requires a session: the cookie set at sign-in, or <code>Authorization: Bearer &lt;token&gt;</code> from mobile-app pairing.</span></p>
+<p class="ep-h">Query parameters</p><div class="ptab">
+  <div class="prow">
+    <span class="p-name">code</span>
+    <span class="p-type">string</span>
+    <span class="p-desc"></span>
+  </div>
+  <div class="prow">
+    <span class="p-name">state</span>
+    <span class="p-type">string</span>
+    <span class="p-desc"></span>
+  </div>
+  <div class="prow">
+    <span class="p-name">error</span>
+    <span class="p-type">string</span>
+    <span class="p-desc"></span>
+  </div>
+</div>
+
+    <p class="ep-h">Responses</p>
+    <div class="ptab">
+  <div class="prow rrow">
+    <span class="r-code s3">303</span>
+    <span class="p-desc">Connected; redirect to Settings → Data &amp; backup</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">400</span>
+    <span class="p-desc">Expired/replayed state</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s5">502</span>
+    <span class="p-desc">Exchange failed</span>
   </div>
     </div>
   </div>

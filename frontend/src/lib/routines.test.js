@@ -119,3 +119,10 @@ describe('deleteRoutine', () => {
     expect(s.week[1]).toEqual(['r2'])
   })
 })
+
+it('an explicit duplicate of a dated routine starts its own progression lineage', () => {
+  const dated = { ...routine, id: 'dated', ex: [{ ...routine.ex[0], progressionRoutineId: 'source' }] }
+  const copy = copyRoutine(dated)
+  expect(copy.ex[0].progressionRoutineId).toBeUndefined()
+  expect(dated.ex[0].progressionRoutineId).toBe('source')
+})

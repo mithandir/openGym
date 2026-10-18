@@ -172,3 +172,15 @@ describe('history after a replace', () => {
     expect(st.routines[0].ex[0].weight).toBe(80)
   })
 })
+
+it('replacing a dated copy across cardio modes retains its source lineage and exclusion', () => {
+  const cfg = { id: BENCH, sets: 2, reps: 5, progressionRoutineId: 'source', excludeFromProgression: true }
+  expect(replaceSlotExercise(cfg, BIKE)).toMatchObject({ id: BIKE, progressionRoutineId: 'source', excludeFromProgression: true })
+})
+
+it('replacing within a dated copy reads the replacement exercise from its source history', () => {
+  const workout = (rid, weight) => ({ routineIds: [rid], entries: [{ id: DB_BENCH, rid, planned: { weight }, target: { sets: 2, reps: 5, weight }, sets: [{ w: weight, r: 5, done: true }] }] })
+  const st = { workouts: [workout('heavy', 100), workout('light', 50)] }
+  const cfg = { id: BENCH, sets: 2, reps: 5, weight: 40, progressionRoutineId: 'heavy' }
+  expect(replaceSlotExercise(cfg, DB_BENCH, st, 'dated').weight).toBe(100)
+})

@@ -34,6 +34,8 @@ import { createMediaStore, mediaLimits, mediaConfig, MediaError, HASH_RE } from 
 import { effectiveRoutineId } from './queue.js';
 import { stampPut } from './sync-stamps.js';
 import { atomicWrite as durableWrite } from './durable.js';
+import { createIntervalsSync } from './intervals-sync.js';
+import { intervalsRoutes } from './intervals-routes.js';
 import { excusedOn, nudgeFor, nudgeWindowOpen, toneOf } from './nudge.js';
 
 const PORT = +(process.env.PORT || 3000);
@@ -1904,6 +1906,30 @@ function dataWritable() {
   return ok;
 }
 
+// Imports use the same stamps, revision ancestry, and atomic write as a device PUT.
+// This synchronous callback is called only after the sync service has re-read current state.
+const INTERVALS = createIntervalsSync({
+  dataDir: DATA, secret: SECRET,
+  userExists: uid => db.users.some(u => u.id === uid && !u.disabled),
+  readState: uid => {
+    const S = readStateStrict(uid);
+    if (S === UNREADABLE) throw new Error('state unreadable');
+    return S;
+  },
+  writeState: (uid, next) => {
+    const cur = readStateStrict(uid);
+    if (cur === UNREADABLE) throw new Error('state unreadable');
+    stampPut(cur, next, { overRead: true });
+    next._rev = (cur?._rev || 0) + 1;
+    next._wids = [...(cur?._wids || []), ...(cur?._wid ? [cur._wid] : [])].slice(-WID_KEEP);
+    next._wid = crypto.randomBytes(8).toString('hex');
+    durableWrite(stateFile(uid), JSON.stringify(next));
+    stateCache.delete(uid);
+  },
+});
+const intervalsPoll = setInterval(() => INTERVALS.tick().catch(() => {}), 60000);
+intervalsPoll.unref();
+
 const routes = {
   // 503 rather than a flag in a 200: the container healthcheck is `wget --spider`, which reads
   // the status and nothing else, and an instance that cannot write its data directory is exactly
@@ -2281,6 +2307,7 @@ const routes = {
     // the old revision until some later write happened to land on a different tick. This is the
     // only writer of a state file in the tree, so evicting here is the whole fix.
     stateCache.delete(user.id);
+    INTERVALS.schedule(user.id);
     // Starts (or stops) the grace clock of every stored file this write stopped (or started)
     // referencing. Bookkeeping only: the state is already saved, so nothing here may turn a
     // successful write into an error.
@@ -2488,6 +2515,8 @@ const routes = {
     // The training history and any Coach credential of theirs, both outside db.json.
     try { fs.unlinkSync(stateFile(u.id)); } catch { /* already gone */ }
     try { coachConfig.clearProfileAuth(u.id); } catch { /* nothing stored */ }
+    // Local credential removal is synchronous; a slow remote revocation must not delay saveDb.
+    INTERVALS.disconnect(u.id).catch(() => {});
     // Their photos and videos — the one place a profile's folder under uploads/ is removed.
     try { MEDIA.removeUser(u.id); } catch (e) { console.error('media: could not remove uploads of', u.id, e.message); }
     saveDb();
@@ -2574,6 +2603,10 @@ const routes = {
   // them: they are closures over db and SECRET, and passing them in keeps that module free of
   // a cycle. Every one of them is inert while the feature is unconfigured.
   ...coachRoutes({ json, readBody, readSession, requireAdmin }),
+  ...intervalsRoutes({ sync: INTERVALS, json, readBody, readSession, origin: ORIGIN, oauth: {
+    clientId: process.env.INTERVALS_CLIENT_ID, clientSecret: process.env.INTERVALS_CLIENT_SECRET,
+    redirectUri: process.env.INTERVALS_REDIRECT_URI,
+  } }),
 
   /* ---------- photos & videos ---------- */
   // Absent, not refusing, when MEDIA_UPLOADS=0: a 404 is what a server from before the feature

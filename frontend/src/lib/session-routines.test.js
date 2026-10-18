@@ -216,3 +216,21 @@ describe('a routine saved from a planned session', () => {
     expect(routineFromSession(saved, 'Copy', []).ex[0]).not.toHaveProperty('prog')
   })
 })
+
+it('saving a dated session as a new reusable routine starts its own progression lineage', () => {
+  const session = { routineIds: ['dated'], entries: [{ id: '0025', rid: 'dated', target: { sets: 2, reps: 5, weight: 100, progressionRoutineId: 'heavy' }, sets: [row({ w: 100, r: 5 })] }] }
+  const routine = routineFromSession(session, 'New routine', [{ id: 'dated', prog: 'double' }, { id: 'heavy', prog: 'linear' }])
+  expect(routine.ex[0].progressionRoutineId).toBeUndefined()
+  expect(routine.ex[0].prog).toBe('double')
+})
+
+it('saving an excluded completed session as a new reusable routine does not inherit its exclusion', () => {
+  const source = { id: 'rehab', excludeFromProgression: true, ex: [{ id: '0025', sets: 1, reps: 5, weight: 20 }] }
+  const st = { unit: 'kg', workouts: [], exWeights: {} }
+  const entries = buildSessionEntries(st, source).map(e => ({ ...e, rid: source.id, sets: e.sets.map(s => ({ ...s, done: true })) }))
+  const completed = buildCompletedWorkout({ id: 'w-rehab', routineIds: [source.id], entries })
+  expect(completed.entries[0].target.excludeFromProgression).toBe(true)
+  const routine = routineFromSession(completed, 'New routine', [source])
+  expect(routine.ex[0].excludeFromProgression).toBeUndefined()
+  expect(buildSessionEntries(st, routine)[0].noProg).toBeUndefined()
+})
