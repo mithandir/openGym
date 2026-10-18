@@ -67,3 +67,19 @@ test('ordinary conflict choices submit the displayed snapshot token', async () =
   const call = m.calls.find(([url]) => url.endsWith('/resolve'))
   expect(JSON.parse(call[1].body)).toEqual({ id: 'activity:w', choice: 'local', token: 'displayed' })
 })
+
+test('connected profiles can re-sync existing activities and see pending progress', async () => {
+  m.status = { connected: true, options: {}, conflicts: [], resyncRemaining: 3 }
+  await mount({ id: 'u' })
+  expect(host.textContent).toContain('Activities left to re-sync: 3')
+  const button = [...host.querySelectorAll('button')].find(b => b.textContent.includes('Re-sync existing activities'))
+  expect(button).toBeTruthy()
+  await act(async () => button.click())
+  expect(m.calls.some(([url, opts]) => url.endsWith('/resync-activities') && opts.method === 'POST')).toBe(true)
+})
+
+test('re-sync is unavailable while another sync is running', async () => {
+  m.status = { connected: true, options: {}, conflicts: [], running: true }
+  await mount({ id: 'u' })
+  expect([...host.querySelectorAll('button')].some(b => b.textContent.includes('Re-sync existing activities'))).toBe(false)
+})

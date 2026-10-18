@@ -1,5 +1,9 @@
 // Korean UI strings. Keys are the English source strings (see lib/i18n.js).
 export default {
+  "Re-sync existing activities": "Re-sync existing activities",
+  "Resends linked workouts in your saved history range to fill missing data, including weight lifted. Conflicts wait for your choice.": "Resends linked workouts in your saved history range to fill missing data, including weight lifted. Conflicts wait for your choice.",
+  "Activities left to re-sync: {0}": "Activities left to re-sync: {0}",
+
   "This date already has another OpenGym session. Move a session to a free date before syncing.": "This date already has another OpenGym session. Move a session to a free date before syncing.",
   // Intervals.icu: controls localized; explanatory text uses the English source until translated.
   "Never": "없음",

@@ -81,7 +81,7 @@ export function createIntervalsSync({ dataDir, secret, readState, writeState, us
     const assignments = Object.entries(S?.dayPlan || {});
     const reviews = (S?.routines || []).filter(r => r.intervalsPlan?.needsReview && !r.ex?.length && assignments.some(([, id]) => id === r.id))
       .map(r => ({ id: r.id, date: assignments.find(([, id]) => id === r.id)[0], name: r.name }));
-    return { connected: true, running: running.has(uid), athlete: doc.athlete, options: doc.options, lastSync: doc.lastSync || null, nextRun: doc.nextRun || null, error: doc.error || null, conflicts: Object.values(doc.conflicts || {}).map(c => ({ ...c, token: conflictToken(uid, doc, c) })), reviews, counts: doc.counts || {} };
+    return { connected: true, running: running.has(uid), athlete: doc.athlete, options: doc.options, lastSync: doc.lastSync || null, nextRun: doc.nextRun || null, error: doc.error || null, conflicts: Object.values(doc.conflicts || {}).map(c => ({ ...c, token: conflictToken(uid, doc, c) })), reviews, resyncRemaining: Object.keys(doc.resyncActivities || {}).length, counts: doc.counts || {} };
   }
   const stateSafe = uid => { try { return readState(uid); } catch { return null; } };
   async function connect(uid, input, oauthAuth, isCurrent = () => true) {
@@ -106,6 +106,17 @@ export function createIntervalsSync({ dataDir, secret, readState, writeState, us
     if (running.has(uid)) throw new IntervalsError('Wait for the current sync to finish.', 409);
     const doc = read(uid); if (!doc) throw new IntervalsError('Connect Intervals.icu first.', 409);
     doc.options = syncOptions({ ...doc.options, ...input }); save(uid, doc); return status(uid);
+  }
+  function resyncActivities(uid) {
+    if (running.has(uid)) throw new IntervalsError('Wait for the current sync to finish.', 409);
+    const doc = read(uid); if (!doc) throw new IntervalsError('Connect Intervals.icu first.', 409);
+    const records = localRecords(state(uid), options(doc));
+    doc.resyncActivities ||= {};
+    for (const r of records) {
+      const id = `activity:${r.key}`;
+      if (r.kind === 'activity' && doc.links[id]?.remoteId != null) doc.resyncActivities[id] = true;
+    }
+    doc.nextRun = now(); save(uid, doc);
   }
   async function disconnect(uid) {
     connecting.delete(uid);
@@ -134,6 +145,11 @@ export function createIntervalsSync({ dataDir, secret, readState, writeState, us
       for (const [id, link] of Object.entries(doc.links)) {
         const date = link.local?.date || link.remote?.date;
         if (date >= (link.kind === 'plan' ? range.today : range.oldest) && date <= (link.kind === 'plan' ? range.newest : range.today)) add(link.kind, link.key);
+      }
+      for (const id of Object.keys(doc.resyncActivities || {})) {
+        const link = doc.links[id];
+        if (link?.kind === 'activity') add('activity', link.key);
+        else delete doc.resyncActivities[id];
       }
       const blockedDates = new Set();
       const planDates = new Map();
@@ -169,6 +185,8 @@ export function createIntervalsSync({ dataDir, secret, readState, writeState, us
         let action = blocked ? 'conflict' : decision(here, remote, baseline);
         const previous = doc.conflicts?.[jobId];
         if (!blocked && previous?.choice && equal(previous.local, here) && equal(previous.remote, remote)) action = previous.choice === 'local' ? 'push' : 'pull';
+        // Republish unchanged linked activities, retaining normal pulls and conflict review.
+        if (doc.resyncActivities?.[jobId] && action === 'same' && here && remote) action = 'push';
         if (action === 'conflict') {
           conflicts[jobId] = { id: jobId, kind, key: id, local: here, remote, blocked, ...(blocked ? { reason: occupied ? 'occupied-date' : 'multiple-events' } : {}) };
           continue;
@@ -182,6 +200,7 @@ export function createIntervalsSync({ dataDir, secret, readState, writeState, us
           // The network request may have raced an edit in OpenGym. Remember exactly what was sent;
           // the new local change remains different from the baseline and will be pushed next time.
           doc.links[jobId] = { kind, key: id, remoteId: raw?.id ?? baseline?.remoteId ?? (kind === 'weight' ? id : null), local: here, remote: saved };
+          if (doc.resyncActivities) delete doc.resyncActivities[jobId];
           counts.pushed++;
         } else if (action === 'pull') {
           const S = state(uid);
@@ -194,6 +213,7 @@ export function createIntervalsSync({ dataDir, secret, readState, writeState, us
           counts.pulled++;
         } else {
           if (here || remote) doc.links[jobId] = { kind, key: id, remoteId: raw?.id ?? baseline?.remoteId ?? id, local: here, remote };
+          if (!here && !remote && doc.resyncActivities) delete doc.resyncActivities[jobId];
           counts.unchanged++;
         }
         delete doc.conflicts[jobId];
@@ -201,7 +221,7 @@ export function createIntervalsSync({ dataDir, secret, readState, writeState, us
       }
       if (!current(uid, doc)) return;
       doc.conflicts = conflicts; doc.counts = counts; doc.lastSync = now(); doc.error = null; doc.failures = 0; doc.retryAt = 0;
-      doc.nextRun = operations > 100 ? now() + 60000 : now() + POLL_MS;
+      doc.nextRun = operations > 100 || Object.keys(doc.resyncActivities || {}).length ? now() + 60000 : now() + POLL_MS;
       save(uid, doc);
     } catch (e) {
       if (!current(uid, doc)) return;
@@ -238,9 +258,9 @@ export function createIntervalsSync({ dataDir, secret, readState, writeState, us
       try {
         const uid = m[1], doc = read(uid);
         if (!userExists(uid)) { await disconnect(uid); continue; }
-        if (doc.options.enabled && (doc.nextRun || 0) <= now()) await run(uid);
+        if ((doc.options.enabled || Object.keys(doc.resyncActivities || {}).length) && (doc.nextRun || 0) <= now()) await run(uid);
       } catch { /* one damaged profile must not stop the other polls */ }
     }
   }
-  return { status, connect, configure, disconnect, run, resolve, schedule, tick, stop() { for (const t of timers.values()) clearTimeout(t); timers.clear(); } };
+  return { status, connect, configure, disconnect, run, resyncActivities, resolve, schedule, tick, stop() { for (const t of timers.values()) clearTimeout(t); timers.clear(); } };
 }

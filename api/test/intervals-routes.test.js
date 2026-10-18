@@ -144,3 +144,16 @@ for (const route of ['POST /api/intervals/oauth/start', 'POST /api/intervals/con
   assert.equal((await starting).status, 409);
   assert.equal(h.calls.length, 0);
 });
+
+test('re-sync queues only the signed-in profile and returns running status', async () => {
+  const calls = [];
+  const h = setup({ sync: {
+    resyncActivities: uid => calls.push(['resync', uid]),
+    run: async uid => calls.push(['run', uid]),
+    status: () => ({ connected: true, running: true, resyncRemaining: 3 }),
+  } });
+  const res = await h.request('POST /api/intervals/resync-activities');
+  assert.equal(res.status, 202);
+  assert.equal(res.data.resyncRemaining, 3);
+  assert.deepEqual(calls, [['resync', 'u'], ['run', 'u']]);
+});
