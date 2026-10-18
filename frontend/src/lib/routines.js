@@ -11,6 +11,8 @@ import { isWarmupRow } from './workout-model.js'
 export function copyRoutine(routine, suffix = 'Copy') {
   const copy = structuredClone(routine)
   copy.id = uid()
+  // An explicit new reusable routine gets its own progress, unlike a dated session copy.
+  for (const cfg of copy.ex || []) delete cfg.progressionRoutineId
   // "Push (Copy)" copied again becomes "Push (Copy 2)", not "Push (Copy) (Copy)".
   const esc = suffix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   const m = new RegExp('^(.*) \\(' + esc + '(?: (\\d+))?\\)$').exec(routine.name || '')
@@ -133,7 +135,7 @@ export function replaceSlotExercise(slot, id, S, rid) {
   const old = slot || {}
   if (old.id === id) return { ...old }
   if ((modeOf(old) === 'cardio') !== isCardio(id)) {
-    const kept = ['sg', 'note', 'restSec'].filter(key => old[key] != null)
+    const kept = ['sg', 'note', 'restSec', 'progressionRoutineId', 'excludeFromProgression'].filter(key => old[key] != null)
     return { id, ...defaultConfig(id), ...Object.fromEntries(kept.map(key => [key, old[key]])) }
   }
   const { id: _replaced, bodyweight: _flag, assisted: _assisted, side: _side, ...carried } = old
@@ -150,7 +152,7 @@ export function replaceSlotExercise(slot, id, S, rid) {
   // holds at what was lifted, or the plan carries on from it. A session saved before plans were
   // stamped has no planned weight, and what was lifted in it is the nearest thing.
   const mode = modeOf(out)
-  const last = S ? sessionsFor(S, id, out, rid).filter(s => s.mode === mode).at(-1) : null
+  const last = S ? sessionsFor(S, id, out, old.progressionRoutineId || rid).filter(s => s.mode === mode).at(-1) : null
   if (last) out.weight = last.planned?.weight ?? last.weight ?? 0
   return out
 }

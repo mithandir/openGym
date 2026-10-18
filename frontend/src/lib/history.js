@@ -342,10 +342,14 @@ export function entryRoutineId(w, en) {
   return [].concat(w?.routineIds ?? [])[0] ?? w?.routineId ?? null
 }
 
+// Dated plan copies keep training the original routine's line of progress. Ownership remains
+// entryRoutineId: editing/copying a routine must still resolve the actual dated routine.
+export const entryProgressionId = (w, en) => en?.target?.progressionRoutineId || entryRoutineId(w, en)
+
 // The entry for one exercise in one saved workout. With a routine id it is that routine's own
 // entry — a combined A+B day can hold the same exercise twice, and the second one is not the
 // first one's history. Without, the first one, as it always was.
-const entryIn = (w, exId, rid) => (w.entries || []).find(e => e && e.id === exId && (!rid || entryRoutineId(w, e) === rid))
+const entryIn = (w, exId, rid) => (w.entries || []).find(e => e && e.id === exId && (!rid || entryProgressionId(w, e) === rid))
 
 /**
  * The last counting session of an exercise: `{ d, sets, target, rid?, planned? }`, or null.
@@ -384,7 +388,7 @@ function lastEntryIn(S, exId, rid) {
     // progression engine can read a session back the way it was logged. Older workouts have
     // none — modeOf() falls back to the body part for them, which is what they were.
     if (done.length) {
-      const slot = entryRoutineId(w, en)
+      const slot = entryProgressionId(w, en)
       return { d: w.d, sets: done, target: en.target || null, ...(slot ? { rid: slot } : {}), ...(en.planned ? { planned: en.planned } : {}) }
     }
   }
@@ -433,7 +437,7 @@ export function freestyleConfig(S, cfg) {
   if (!last) return { ...cfg }
   // What a dumbbell weight meant last time is that session's stamp, not a choice to copy: a
   // freestyle add follows the exercise's own setting as it is now (lib/dumbbells.js).
-  const { dbLoad: _meant, ...lastTarget } = last.target || {}
+  const { dbLoad: _meant, progressionRoutineId: _source, ...lastTarget } = last.target || {}
   return {
     ...cfg,
     ...lastTarget,

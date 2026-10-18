@@ -1425,6 +1425,7 @@ export function swapActiveWorkoutExercise(index) {
     // A swap is an in-place substitution — routine identity is unchanged, so the replacement
     // keeps the slot's own `rid` and reads its prescription from that routine (not a
     // session-wide one). A slot with no `rid` is freestyle.
+    if (current.target?.progressionRoutineId) full.progressionRoutineId = current.target.progressionRoutineId
     const slotRoutine = current.rid ? st.routines.find(r => r.id === current.rid) : null
     const freestyle = !slotRoutine
     // Same rows the add flow builds: last time's loads and, in a planned session, the
@@ -1722,8 +1723,10 @@ function ExConfig({ ex, existing, onSave, onDelete, onReplace, close, routine, i
     const withMeant = dbLoad ? { dbLoad } : {}
     // "Last set to failure": written only when on, so a plan that never asked keeps its shape.
     const withFailure = c.lastToFailure === true ? { lastToFailure: true } : {}
-    if (cardio) onSave({ sets, min: Math.max(1, Math.round(c.min) || 20), speed: Math.max(0, c.speed || 8), ...withNote, ...withRest })
-    else if (mode === 'time') onSave({ sets, mode: 'time', sec: Math.max(1, Math.round(c.sec) || 45), weight: Math.max(0, c.weight || 0), ...flags, ...(perSide ? { side: true } : {}), ...prog, ...withNote, ...withWarmups, ...withRest, ...withMeant, ...withFailure })
+    // Editing a dated copy changes its prescription while retaining its source training block.
+    const withSource = Object.fromEntries(['progressionRoutineId', 'excludeFromProgression'].filter(key => seed[key] != null).map(key => [key, seed[key]]))
+    if (cardio) onSave({ sets, min: Math.max(1, Math.round(c.min) || 20), speed: Math.max(0, c.speed || 8), ...withNote, ...withRest, ...withSource })
+    else if (mode === 'time') onSave({ sets, mode: 'time', sec: Math.max(1, Math.round(c.sec) || 45), weight: Math.max(0, c.weight || 0), ...flags, ...(perSide ? { side: true } : {}), ...prog, ...withNote, ...withWarmups, ...withRest, ...withMeant, ...withFailure, ...withSource })
     else {
       // A unilateral target is stored even: the split has to divide, and a typed 15 would
       // otherwise plan seven reps on one side and eight on the other, every session.
@@ -1757,7 +1760,7 @@ function ExConfig({ ex, existing, onSave, onDelete, onReplace, close, routine, i
       if (c.backoff === true && backoffOffered(out, 'reps', ex, bw) && isBackoff({ ...out, backoff: true })) out.backoff = true
       // A pyramid has its own Max set for this, so the flag is not offered (or kept) there.
       if (!list.length) Object.assign(out, withFailure)
-      onSave(out)
+      onSave({ ...out, ...withSource })
     }
   }
   return <>

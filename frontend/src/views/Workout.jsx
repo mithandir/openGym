@@ -189,7 +189,7 @@ function ExerciseBlock({ entryIdx, compact, dense, editing, onToggle, onToggleSi
   const H = sessionHistory(S)
   // The routine's own last session of this exercise (or any, for a routine that has none), the
   // same one the rows and the progression line were built from (#216).
-  const last = lastEntryFor(H, entry.id, entry.rid)
+  const last = lastEntryFor(H, entry.id, entry.target?.progressionRoutineId || entry.rid)
   const standingNote = exNoteFor(S, entry.id)
   // Only worth surfacing while there is still work left: once the exercise is finished, a note
   // telling you what to do in it is behind you, and the block is already long.
@@ -1225,7 +1225,7 @@ function ActiveWorkout() {
   const setNoProg = (idx, on) => update(s => setEntryNoProg(s.active, idx, on))
   // A deload or rehab routine keeps its own exercises out (RoutineEdit). That is the routine's
   // setting, so its entries get the marker but no switch.
-  const routineKeepsOut = e => !!e?.rid && S.routines.some(r => r.id === e.rid && r.excludeFromProgression === true)
+  const routineKeepsOut = e => builtOutOfProgression(e, S.routines.find(r => r.id === e?.rid))
   // The same for the whole session from the header ⋮ (Discord, asierlama: "exclude the current
   // workout" on an injury day): every exercise gets the marker, and one added later joins them.
   // Absent when a deload or rehab routine already keeps every exercise out, since nothing is left
@@ -1389,6 +1389,7 @@ function ActiveWorkout() {
       if (focusMode) focusPointerEpoch.current++
       update(s => {
         const full = { ...cfg, id: ex.id }
+        if (curEntry?.target?.progressionRoutineId) full.progressionRoutineId = curEntry.target.progressionRoutineId
         // A planned session builds the exercise the way its routine would (prescription, reps
         // source, target); freestyle reproduces what you did last time.
         // Read from before the session's day when it is logged into the past (sessionHistory).

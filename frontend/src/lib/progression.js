@@ -16,7 +16,7 @@
 //   · fewer sets than prescribed                       → miss
 // So a session that fell apart can never advance the load as though it had succeeded.
 
-import { modeOf, repStep, rerampWarmups, isBw, isPerSide, entryExcluded, entryRoutineId } from './history.js'
+import { modeOf, repStep, rerampWarmups, isBw, isPerSide, entryExcluded, entryProgressionId } from './history.js'
 import { EXIDX, isAssisted, isLoadedEq, defaultIncrement } from './exercises.js'
 import { isWarmupRow, isSideSet, syncSideAggregate, makeSideSet } from './workout-model.js'
 import { normalizeRepRange } from './rep-range.js'
@@ -340,7 +340,7 @@ export function sessionsFor(S, exId, fallback, rid) {
 function sessionsIn(S, exId, fallback, rid) {
   const out = []
   ;(S.workouts || []).forEach(w => {
-    const entry = (w.entries || []).find(e => e && e.id === exId && (!rid || entryRoutineId(w, e) === rid))
+    const entry = (w.entries || []).find(e => e && e.id === exId && (!rid || entryProgressionId(w, e) === rid))
     if (!entry) return
     // A session that does not count for this exercise cannot become the baseline for its next
     // prescription. Exclusion is per-entry now (ENG-11): a legacy whole-workout
@@ -349,7 +349,7 @@ function sessionsIn(S, exId, fallback, rid) {
     // never rewrite it. This is the only progression-exclusion path in the file.
     if (entryExcluded(w, entry)) return
     if (!entry.sets.some(s => s.done && !isWarmupRow(s))) return
-    const slot = entryRoutineId(w, entry)
+    const slot = entryProgressionId(w, entry)
     out.push({ d: w.d, ...(slot ? { rid: slot } : {}), ...(entry.planned ? { planned: entry.planned } : {}), ...readSession(entry, fallback) })
   })
   return out
