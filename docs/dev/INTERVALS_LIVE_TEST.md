@@ -60,7 +60,7 @@ live requires an approved Intervals OAuth application configured on the server.
 
 ## Re-sync existing activities
 
-In Settings → Data & backup → Intervals.icu, choose **Re-sync existing activities** to resend linked completed workouts in the saved history range. Save a larger history range first to include older workouts. This fills fields such as Weight Lifted (kg) without creating duplicate activities. Unlinked activities, body weight, and planned sessions continue through normal sync.
+In Settings → Integrations → Intervals.icu, choose **Re-sync existing activities** to resend linked completed workouts in the saved history range. Save a larger history range first to include older workouts. This fills fields such as Weight Lifted (kg) without creating duplicate activities. Unlinked activities, body weight, and planned sessions continue through normal sync.
 
 The action queues work on the server and shows the remaining activity count. It respects network backoff, resumes after restart, and continues even with automatic sync off. Remote-only summary edits are imported before the activity is resent; conflicts and deletions still require review. Work completes in batches of up to 100 writes.
 

@@ -7,7 +7,7 @@ cron job, public webhook endpoint, or mobile app running in the background is ne
 ## Connect
 
 1. Sign in to your OpenGym server and let your profile sync to it.
-2. Open **Settings → Data & backup → Intervals.icu**.
+2. Open **Settings → Integrations → Intervals.icu**.
 3. Select the history range (90 days by default, up to 3,650), planning horizon
    (42 days by default, up to 180), and your IANA timezone, e.g. `Europe/Zurich`.
 4. On a shared installation, choose **Connect with Intervals.icu** and grant

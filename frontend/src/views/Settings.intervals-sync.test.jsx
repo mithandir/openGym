@@ -4,6 +4,7 @@ import { createRoot } from 'react-dom/client'
 import { MemoryRouter, Route, Routes, useParams } from 'react-router-dom'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import Settings from './Settings.jsx'
+import { searchSettings } from './settings-pages.js'
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
@@ -54,11 +55,11 @@ function RoutineEditorRoute() {
   return <div data-routine-editor={id}>Routine editor</div>
 }
 
-it('opens the imported routine editor when Intervals.icu requests Review plan from Settings', async () => {
+it('opens the imported routine editor when Intervals.icu requests Review plan from Integrations', async () => {
   await act(async () => root.render(
-    <MemoryRouter initialEntries={['/settings/data']}>
+    <MemoryRouter initialEntries={['/settings/integrations']}>
       <Routes>
-        <Route path="/settings/data" element={<Settings page="data" />} />
+        <Route path="/settings/integrations" element={<Settings page="integrations" />} />
         <Route path="/plan/r/:id" element={<RoutineEditorRoute />} />
       </Routes>
     </MemoryRouter>
@@ -69,4 +70,17 @@ it('opens the imported routine editor when Intervals.icu requests Review plan fr
   act(() => mocks.review('imported-routine-42'))
 
   expect(host.querySelector('[data-routine-editor]')?.dataset.routineEditor).toBe('imported-routine-42')
+})
+
+it('keeps Intervals.icu out of Data & backup after moving it to Integrations', async () => {
+  await act(async () => root.render(
+    <MemoryRouter><Settings page="data" /></MemoryRouter>
+  ))
+  expect(host.textContent).not.toContain('Intervals.icu')
+})
+
+it('finds Intervals.icu on the Integrations page in settings search', () => {
+  const hits = searchSettings('intervals', { demo: false, user: { id: 'u1' } })
+  expect(hits.some(hit => hit.title === 'Intervals.icu' && hit.page === 'integrations')).toBe(true)
+  expect(hits.some(hit => hit.title === 'Intervals.icu' && hit.page === 'data')).toBe(false)
 })
