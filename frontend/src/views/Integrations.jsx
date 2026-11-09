@@ -16,6 +16,7 @@ import { importFromApp, importFromHevy, confirmSheet, menuSheet } from '../sheet
 import { csvExportSheet } from '../components/CsvExportSheet.jsx'
 import Icon from '../components/Icon.jsx'
 import EmptyState from '../components/EmptyState.jsx'
+import IntervalsSync from '../components/IntervalsSync.jsx'
 import { Section, Row, Switch, Button, TextField } from '../components/ui.jsx'
 import { isOn } from '../lib/modules.js'
 
@@ -165,6 +166,8 @@ export default function IntegrationsPage({ android = false, ios = false }) {
       <Section title={t(cat.title)}>
         {cat.cards.map(card => <Card key={card.id} card={card} onOpen={() => open(card)} onAction={() => act(card)} />)}
       </Section>
+      {cat.id === 'training' && !DEMO && <IntervalsSync key={user?.id || 'guest'} user={user} mobile={MOBILE}
+        onPull={() => useStore.getState().pullState()} onReview={id => nav('/plan/r/' + id)} />}
       {cat.id === 'health' && <WorksWith platform={platform} nav={nav} />}
     </div>)}
     <input ref={fileRef} type="file" accept=".csv,.xml,text/csv,text/xml" style={{ display: 'none' }}
